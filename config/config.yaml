@@ -1,0 +1,15 @@
+
+env: LOCAL
+
+db:
+  url: postgresql://postgres:password@localhost:5432/webanalyzer?sslmode=disable
+  maxidletime: 1h
+  maxlifetime: 1h
+  maxopenconn: 100
+  maxidleconn: 10
+
+http_port: ":9000"
+
+migration:
+  direction: "up"
+  version: 0
