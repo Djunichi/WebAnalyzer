@@ -17,8 +17,8 @@ func NewWebPageRepository(db *gorm.DB) *WebPageRepository {
 	return &WebPageRepository{db: db}
 }
 
-func (w *WebPageRepository) Add(ctx context.Context, req *dto.AnalyzePageRes, url string) error {
-	e := req.ToModel(url)
+func (w *WebPageRepository) Add(ctx context.Context, req *dto.AnalyzePageRes) error {
+	e := req.ToModel()
 
 	err := w.db.WithContext(ctx).Create(e).Error
 	if err != nil {
@@ -31,7 +31,7 @@ func (w *WebPageRepository) Add(ctx context.Context, req *dto.AnalyzePageRes, ur
 func (w *WebPageRepository) Remove(ctx context.Context, id uuid.UUID) error {
 	err := w.db.WithContext(ctx).Delete(&model.WebpageRequest{}, "request_id = ?", id)
 	if err != nil {
-		return fmt.Errorf("[WebPageRepository] failed to delete WebpageRequest: %w", err)
+		return fmt.Errorf("[WebPageRepository] failed to delete WebpageRequest: %v", err)
 	}
 
 	return nil

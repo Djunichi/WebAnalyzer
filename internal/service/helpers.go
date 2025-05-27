@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -66,43 +68,30 @@ func traverse(n *html.Node, result *dto.AnalyzePageRes, baseURL *url.URL) {
 		traverse(child, result, baseURL)
 	}
 
-	// Asynchronous checking of collected links
 	if len(hrefs) > 0 {
-		result.InaccessibleLinks += checkLinksConcurrently(hrefs, baseURL, 10)
+		result.InaccessibleLinks += checkLinksConcurrently(hrefs, baseURL)
 	}
 }
 
-func checkLinksConcurrently(links []string, baseURL *url.URL, limit int) int {
-	var inaccessibleCount int
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, limit)
-	results := make(chan bool, len(links))
-
-	for _, href := range links {
-		wg.Add(1)
-		go func(link string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			if !isLinkAccessible(link, baseURL) {
-				results <- true
-			} else {
-				results <- false
-			}
-		}(href)
+func detectHTMLVersion(rawHTML string) string {
+	doctypeRe := regexp.MustCompile(`(?i)<!DOCTYPE\s+([^>]+)>`)
+	matches := doctypeRe.FindStringSubmatch(rawHTML)
+	if len(matches) < 2 {
+		return ""
 	}
 
-	wg.Wait()
-	close(results)
+	dt := strings.ToLower(matches[1])
 
-	for r := range results {
-		if r {
-			inaccessibleCount++
-		}
+	switch {
+	case strings.Contains(dt, "html 4.01"):
+		return "HTML 4.01"
+	case strings.Contains(dt, "xhtml"):
+		return "XHTML"
+	case strings.Contains(dt, "html"):
+		return "HTML5"
+	default:
+		return dt
 	}
-
-	return inaccessibleCount
 }
 
 // isInternalLink checks is link is internal
@@ -123,28 +112,102 @@ func isInternalLink(href string, baseURL *url.URL) bool {
 	return false
 }
 
-// isLinkAccessible checks is link accessible
-func isLinkAccessible(href string, baseURL *url.URL) bool {
-	linkURL, err := url.Parse(href)
-	if err != nil {
-		return false
+var (
+	linkCache  = sync.Map{}
+	httpClient = &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:       100,
+			IdleConnTimeout:    90 * time.Second,
+			DisableCompression: false,
+		},
+	}
+)
+
+// isLinkAccessibleCached checks if a link is accessible with caching
+func isLinkAccessibleCached(href string, baseURL *url.URL) bool {
+	cacheKey := href
+	if val, ok := linkCache.Load(cacheKey); ok {
+		return val.(bool)
 	}
 
+	if !isCheckableLink(href) {
+		return true // skip non-checkable links
+	}
+
+	linkURL, err := url.Parse(href)
+	if err != nil {
+		linkCache.Store(cacheKey, false)
+		return false
+	}
 	if linkURL.Host == "" {
 		linkURL.Scheme = baseURL.Scheme
 		linkURL.Host = baseURL.Host
 	}
 
-	client := http.Client{
-		Timeout: 5 * time.Second,
-	}
-
-	resp, err := client.Head(linkURL.String())
+	req, err := http.NewRequest("GET", linkURL.String(), nil)
 	if err != nil {
+		linkCache.Store(cacheKey, false)
+		return false
+	}
+	req.Header.Set("Range", "bytes=0-0")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		linkCache.Store(cacheKey, false)
 		return false
 	}
 	defer io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 
-	return resp.StatusCode >= 200 && resp.StatusCode < 400
+	accessible := resp.StatusCode >= 200 && resp.StatusCode < 400
+	linkCache.Store(cacheKey, accessible)
+	return accessible
+}
+
+func isCheckableLink(link string) bool {
+	l := strings.ToLower(strings.TrimSpace(link))
+	return l != "" &&
+		!strings.HasPrefix(l, "mailto:") &&
+		!strings.HasPrefix(l, "javascript:") &&
+		!strings.HasPrefix(l, "tel:") &&
+		!strings.HasPrefix(l, "#") &&
+		!strings.HasPrefix(l, "data:") &&
+		!strings.HasPrefix(l, "ftp:") &&
+		!strings.HasPrefix(l, "ws:") &&
+		!strings.HasPrefix(l, "wss:")
+}
+
+func checkLinksConcurrently(links []string, baseURL *url.URL) int {
+	var inaccessibleCount int
+	var wg sync.WaitGroup
+	limit := runtime.NumCPU() * 16
+	sem := make(chan struct{}, limit)
+	results := make(chan bool, len(links))
+
+	for _, href := range links {
+		wg.Add(1)
+		go func(link string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			if !isLinkAccessibleCached(link, baseURL) {
+				results <- true
+			} else {
+				results <- false
+			}
+		}(href)
+	}
+
+	wg.Wait()
+	close(results)
+
+	for r := range results {
+		if r {
+			inaccessibleCount++
+		}
+	}
+
+	return inaccessibleCount
 }

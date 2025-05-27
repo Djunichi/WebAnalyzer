@@ -10,6 +10,9 @@ WORKDIR /app
 # Copy go.mod and go.sum files for dependency resolution
 COPY go.mod go.sum ./
 
+# Copy Templates
+COPY templates/ templates/
+
 # Download and cache Go modules
 RUN go mod download
 
@@ -36,6 +39,9 @@ COPY --from=build /app/web-analyzer /usr/local/bin/web-analyzer
 
 # Copy config
 COPY --from=build /app/config /root/config
+
+# Copy templates
+COPY --from=build /app/templates /root/templates
 
 # Expose the port on which the service will run
 EXPOSE 8080

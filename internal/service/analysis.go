@@ -35,7 +35,10 @@ func (a *AnalysisService) GetAnalysisById(ctx context.Context, id uuid.UUID) (*d
 		return nil, err
 	}
 
-	result := dto.AnalyzePageRes{}.FromModel(res)
+	result, err := dto.AnalyzePageRes{}.FromModel(res)
+	if err != nil {
+		return nil, err
+	}
 
 	return result, nil
 }

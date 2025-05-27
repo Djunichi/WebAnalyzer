@@ -2,7 +2,7 @@
 env: LOCAL
 
 db:
-  url: postgresql://postgres:password@localhost:5432/webanalyzer?sslmode=disable
+  url: postgresql://postgres:password@postgres:5432/webanalyzer?sslmode=disable
   maxidletime: 1h
   maxlifetime: 1h
   maxopenconn: 100

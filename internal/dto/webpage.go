@@ -12,6 +12,7 @@ type AnalyzePageReq struct {
 
 type AnalyzePageRes struct {
 	StatusCode        int            `json:"statusCode"`
+	Url               string         `json:"url"`
 	HTMLVersion       string         `json:"HTMLVersion"`
 	Title             string         `json:"title"`
 	Headings          map[string]int `json:"headings"`
@@ -22,9 +23,9 @@ type AnalyzePageRes struct {
 	Error             string         `json:"error,omitempty"`
 }
 
-func (a AnalyzePageRes) ToModel(url string) *model.WebpageRequest {
+func (a AnalyzePageRes) ToModel() *model.WebpageRequest {
 	return &model.WebpageRequest{
-		URL:                     url,
+		URL:                     a.Url,
 		StatusCode:              a.StatusCode,
 		HTMLVersion:             &a.HTMLVersion,
 		Title:                   &a.Title,
@@ -37,7 +38,7 @@ func (a AnalyzePageRes) ToModel(url string) *model.WebpageRequest {
 	}
 }
 
-func (a AnalyzePageRes) FromModel(model *model.WebpageRequest) *AnalyzePageRes {
+func (a AnalyzePageRes) FromModel(model *model.WebpageRequest) (*AnalyzePageRes, error) {
 
 	res := &AnalyzePageRes{
 		StatusCode: model.StatusCode,
@@ -47,14 +48,22 @@ func (a AnalyzePageRes) FromModel(model *model.WebpageRequest) *AnalyzePageRes {
 		res.Error = *model.ErrorDescription
 	} else {
 		res.HTMLVersion = *model.HTMLVersion
+		res.Url = model.URL
 		res.Title = *model.Title
-		res.Headings = helpers.FromJSONMap(model.Headings)
 		res.InternalLinks = *model.InternalLinksNumber
 		res.ExternalLinks = *model.ExternalLinksNumber
 		res.InaccessibleLinks = *model.InaccessibleLinksNumber
 		res.HasLoginForm = model.ContainsLoginForm
 	}
-	return res
+
+	h, err := helpers.FromJSONMap(model.Headings)
+	if err != nil {
+		return nil, err
+	}
+
+	res.Headings = h
+
+	return res, nil
 }
 
 type GetAllAnalysesRes struct {

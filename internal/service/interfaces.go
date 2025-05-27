@@ -8,7 +8,7 @@ import (
 )
 
 type WebPageRepo interface {
-	Add(context.Context, *dto.AnalyzePageRes, string) error
+	Add(context.Context, *dto.AnalyzePageRes) error
 	Remove(context.Context, uuid.UUID) error
 	GetAll(context.Context) ([]model.Analysis, error)
 	GetByID(context.Context, uuid.UUID) (*model.WebpageRequest, error)
