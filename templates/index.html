@@ -7,10 +7,11 @@
     <style>
         body { padding: 20px; max-width: 960px; margin: auto; }
         .spinner-border { display: none; }
-        #result, #history { margin-top: 20px; }
+        .fade { opacity: 0; transition: opacity 0.3s ease-in-out; }
+        .fade.show { opacity: 1; }
     </style>
 </head>
-<body>
+<body onload="document.getElementById('urlInput').focus()">
 <h1 class="mb-4">Web Analyzer</h1>
 
 <form id="analyzeForm" class="mb-3 d-flex gap-2">
@@ -26,11 +27,13 @@
 
 <button id="loadHistoryBtn" class="btn btn-outline-secondary mb-4">Show History</button>
 
-<div id="result"></div>
-<div id="history"></div>
+<div id="result" class="fade"></div>
+<div id="history" class="fade"></div>
 
 <script>
     const spinner = document.getElementById('loadingSpinner');
+    const resultEl = document.getElementById('result');
+    const historyEl = document.getElementById('history');
 
     function toggleSpinner(show) {
         spinner.style.display = show ? 'inline-block' : 'none';
@@ -49,104 +52,114 @@
         const headings = Object.entries(data.headings || {})
             .map(([tag, count]) => `<li><strong>${tag.toUpperCase()}:</strong> ${count}</li>`).join('');
 
-        document.getElementById('result').innerHTML = `
+        resultEl.innerHTML = `
         <div class="card border-success">
             <div class="card-header bg-success text-white">Analysis Summary</div>
             <div class="card-body">
                 <ul class="list-group">
-                    <li class="list-group-item"><strong>Title:</strong> ${data.title}</li>
-                    <li class="list-group-item"><strong>URL:</strong> ${data.url || ''}</li>
-                    <li class="list-group-item"><strong>Status Code:</strong> ${data.statusCode}</li>
-                    <li class="list-group-item"><strong>HTML Version:</strong> ${data.HTMLVersion}</li>
-                    <li class="list-group-item"><strong>Internal Links:</strong> ${data.internalLinks}</li>
-                    <li class="list-group-item"><strong>External Links:</strong> ${data.externalLinks}</li>
-                    <li class="list-group-item"><strong>Inaccessible Links:</strong> ${data.inaccessible_links}</li>
-                    <li class="list-group-item"><strong>Contains Login Form:</strong> ${data.hasLoginForm ? 'Yes' : 'No'}</li>
+                    ${createListItem("Title", data.title)}
+                    ${createListItem("URL", data.url || '')}
+                    ${createListItem("Status Code", data.statusCode)}
+                    ${createListItem("HTML Version", data.HTMLVersion)}
+                    ${createListItem("Internal Links", data.internalLinks)}
+                    ${createListItem("External Links", data.externalLinks)}
+                    ${createListItem("Inaccessible Links", data.inaccessible_links)}
+                    ${createListItem("Contains Login Form", data.hasLoginForm ? "Yes" : "No")}
                 </ul>
                 <h5 class="mt-3">Headings Breakdown</h5>
                 <ul>${headings}</ul>
             </div>
-        </div>
-        `;
+        </div>`;
+        resultEl.classList.add("show");
     }
 
-    document.getElementById('analyzeForm').addEventListener('submit', function (e) {
+    function createListItem(label, value) {
+        return `<li class="list-group-item"><strong>${label}:</strong> ${value}</li>`;
+    }
+
+    document.getElementById('analyzeForm').addEventListener('submit', async function (e) {
         e.preventDefault();
+        resultEl.classList.remove("show");
         const url = document.getElementById('urlInput').value.trim();
-        const resultEl = document.getElementById('result');
         resultEl.innerHTML = '';
         if (!validateUrl(url)) {
             resultEl.innerHTML = `<div class="alert alert-warning">Please enter a valid URL (e.g., https://example.com)</div>`;
+            resultEl.classList.add("show");
             return;
         }
 
         toggleSpinner(true);
-
-        fetch('/api/v1/web-pages/analyze', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url })
-        })
-            .then(res => res.json())
-            .then(data => {
-                toggleSpinner(false);
-                if (data.error) {
-                    resultEl.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
-                } else {
-                    renderResult(data);
-                }
-            })
-            .catch(err => {
-                toggleSpinner(false);
-                resultEl.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+        try {
+            const res = await fetch('/api/v1/web-pages/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
             });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            renderResult(data);
+        } catch (err) {
+            resultEl.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+            resultEl.classList.add("show");
+        } finally {
+            toggleSpinner(false);
+        }
     });
 
-    document.getElementById('loadHistoryBtn').addEventListener('click', function () {
-        fetch('/api/v1/analyses/all')
-            .then(res => res.json())
-            .then(data => {
-                const list = data.analyses || data;
-                if (!Array.isArray(list)) {
-                    document.getElementById('history').innerHTML = `<div class="alert alert-warning">Failed to load history</div>`;
-                    return;
-                }
-
-                const rows = list.map(item => `
-                    <tr class="link" data-id="${item.id}" onclick="loadAnalysis(this.dataset.id)" style="cursor:pointer">
-                      <td>${item.url}</td>
-                      <td>${item.title}</td>
-                      <td>${new Date(item.timeRequested).toLocaleString()}</td>
-                    </tr>
-                `).join('');
-
-                document.getElementById('history').innerHTML = `
-                    <h2>History</h2>
-                    <table class="table table-bordered table-hover">
-                      <thead class="table-light">
-                        <tr><th>URL</th><th>Title</th><th>Requested At</th></tr>
-                      </thead>
-                      <tbody>${rows}</tbody>
-                    </table>
-                `;
-            })
-            .catch(err => {
-                document.getElementById('history').innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
-            });
-    });
-
-    function loadAnalysis(id) {
+    document.getElementById('loadHistoryBtn').addEventListener('click', async function () {
         toggleSpinner(true);
-        fetch('/api/v1/analyses/by-id?session-id=' + id)
-            .then(res => res.json())
-            .then(data => {
-                toggleSpinner(false);
-                renderResult(data);
-            })
-            .catch(err => {
-                toggleSpinner(false);
-                document.getElementById('result').innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
-            });
+        historyEl.classList.remove("show");
+        try {
+            const res = await fetch('/api/v1/analyses/all');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const list = data.analyses || data;
+
+            if (!Array.isArray(list)) {
+                historyEl.innerHTML = `<div class="alert alert-warning">Failed to load history</div>`;
+                historyEl.classList.add("show");
+                return;
+            }
+
+            const rows = list.map(item => `
+                <tr class="${item.statusCode >= 400 ? 'table-danger' : 'table-success'} link" data-id="${item.id}" onclick="loadAnalysis(this.dataset.id)" style="cursor:pointer">
+                  <td>${item.url}</td>
+                  <td>${item.title}</td>
+                  <td>${new Date(item.timeRequested).toLocaleString()}</td>
+                </tr>
+            `).join('');
+
+            historyEl.innerHTML = `
+                <h2>History</h2>
+                <table class="table table-bordered table-hover">
+                  <thead class="table-light">
+                    <tr><th>URL</th><th>Title</th><th>Requested At</th></tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>`;
+            historyEl.classList.add("show");
+        } catch (err) {
+            historyEl.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+            historyEl.classList.add("show");
+        } finally {
+            toggleSpinner(false);
+        }
+    });
+
+    async function loadAnalysis(id) {
+        toggleSpinner(true);
+        resultEl.classList.remove("show");
+        try {
+            const res = await fetch('/api/v1/analyses/by-id?analysis-id=' + id);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            renderResult(data);
+        } catch (err) {
+            resultEl.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+            resultEl.classList.add("show");
+        } finally {
+            toggleSpinner(false);
+        }
     }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

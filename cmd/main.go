@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "WebAnalyzer/docs"
 	"WebAnalyzer/internal/config"
 	"WebAnalyzer/internal/handler"
 	"WebAnalyzer/internal/migration"
@@ -16,6 +17,11 @@ import (
 	"syscall"
 	"time"
 )
+
+// @title WebAnalyzer API
+// @version 1.0
+// @description This is a sample server for analyzing webpages.
+// @BasePath /
 
 var logger *zap.SugaredLogger
 

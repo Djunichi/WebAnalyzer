@@ -16,7 +16,7 @@ import (
 // @Success 200 {object} dto.AnalyzePageRes "Result"
 // @Failure 400 {object} error "Bad Request"
 // @Failure 500 {object} error "Internal Server Error"
-// @Router /web-pages/Analyze [post]
+// @Router /api/v1/web-pages/Analyze [post]
 func (h *httpHandler) analyzePage() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := &dto.AnalyzePageReq{}

@@ -1,0 +1,171 @@
+basePath: /
+definitions:
+  dto.AnalyzePageReq:
+    properties:
+      url:
+        type: string
+    type: object
+  dto.AnalyzePageRes:
+    properties:
+      HTMLVersion:
+        type: string
+      error:
+        type: string
+      externalLinks:
+        type: integer
+      hasLoginForm:
+        type: boolean
+      headings:
+        additionalProperties:
+          type: integer
+        type: object
+      inaccessible_links:
+        type: integer
+      internalLinks:
+        type: integer
+      statusCode:
+        type: integer
+      title:
+        type: string
+      url:
+        type: string
+    type: object
+  dto.GetAllAnalysesRes:
+    properties:
+      analyses:
+        items:
+          $ref: '#/definitions/model.Analysis'
+        type: array
+    type: object
+  model.Analysis:
+    properties:
+      id:
+        type: string
+      timeRequested:
+        type: string
+      title:
+        type: string
+      url:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: This is a sample server for analyzing webpages.
+  title: WebAnalyzer API
+  version: "1.0"
+paths:
+  /api/v1/analyses/all:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Result
+          schema:
+            $ref: '#/definitions/dto.GetAllAnalysesRes'
+        "400":
+          description: Bad Request
+          schema: {}
+        "500":
+          description: Internal Server Error
+          schema: {}
+      summary: Get All Previous analyses
+      tags:
+      - WebPage
+  /api/v1/analyses/by-id:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: analysis UUID
+        in: query
+        name: analysis-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Result
+          schema:
+            $ref: '#/definitions/dto.AnalyzePageRes'
+        "400":
+          description: Bad Request
+          schema: {}
+        "500":
+          description: Internal Server Error
+          schema: {}
+      summary: Get Previous analysis by ID
+      tags:
+      - WebPage
+  /api/v1/web-pages/Analyze:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Request Body
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AnalyzePageReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Result
+          schema:
+            $ref: '#/definitions/dto.AnalyzePageRes'
+        "400":
+          description: Bad Request
+          schema: {}
+        "500":
+          description: Internal Server Error
+          schema: {}
+      summary: Analyze a Web Page
+      tags:
+      - WebPage
+  /ping:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: pong
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema: {}
+      summary: health check
+      tags:
+      - ""
+  /version:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Returns current version
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema: {}
+        "500":
+          description: Internal Server Error
+          schema: {}
+      summary: fetches version
+      tags:
+      - ""
+swagger: "2.0"
